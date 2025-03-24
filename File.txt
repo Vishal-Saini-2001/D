@@ -1,309 +1,169 @@
-3. settings.js (Database Configuration)
-Modify settings.js to include PostgreSQL credentials.
+Step 1: Install Java (Required for Kafka & Spark)
+Check if Java is installed:
 
-js
-Copy code
-module.exports = {
-  user: "your_db_user",
-  host: "localhost",
-  database: "notejam",
-  password: "your_db_password",
-  port: 5432
-};
-Replace your_db_user and your_db_password with actual PostgreSQL credentials.
+bash
+Copy
+Edit
 
-4. db.js (Database Connection)
-Replace SQLite with PostgreSQL's pg.Pool.
+java -version
 
-js
-Copy code
-const { Pool } = require("pg");
-const settings = require("./settings");
+If not installed, install it using Homebrew:
 
-const pool = new Pool(settings);
+bash
+Copy
+Edit
 
-pool.connect()
-  .then(() => console.log("Connected to PostgreSQL"))
-  .catch((err) => console.error("Database connection error:", err));
+brew install openjdk
 
-module.exports = pool;
-5. routes/users.js (User Routes)
-Replace SQLite queries with PostgreSQL.
+Step 2: Install Apache Kafka on Mac
+1. Install Kafka using Homebrew
+bash
+Copy
+Edit
 
-js
-Copy code
-const express = require("express");
-const pool = require("../db");
-const router = express.Router();
+brew install kafka
 
-// User Registration
-router.post("/register", async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const result = await pool.query(
-      "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING *",
-      [email, password]
-    );
-    res.json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json(err);
-  }
-});
+2. Start Zookeeper (Required for Kafka)
+bash
+Copy
+Edit
 
-// Get all users
-router.get("/", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT * FROM users");
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json(err);
-  }
-});
+zookeeper-server-start /opt/homebrew/etc/kafka/zookeeper.properties
 
-module.exports = router;
-6. routes/notes.js (Note Routes)
-Convert SQLite queries to PostgreSQL queries.
+3. Start Kafka
+bash
+Copy
+Edit
 
-js
-Copy code
-const express = require("express");
-const pool = require("../db");
-const router = express.Router();
+kafka-server-start /opt/homebrew/etc/kafka/server.properties
 
-// Create a Note
-router.post("/create", async (req, res) => {
-  const { title, content, userId } = req.body;
-  try {
-    const result = await pool.query(
-      "INSERT INTO notes (title, content, user_id) VALUES ($1, $2, $3) RETURNING *",
-      [title, content, userId]
-    );
-    res.json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json(err);
-  }
-});
+✅ Now Kafka is running on your Mac!
 
-// Get all notes
-router.get("/", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT * FROM notes");
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json(err);
-  }
-});
+Step 3: Install Apache Spark on Mac
+1. Install Spark using Homebrew
+bash
+Copy
+Edit
 
-module.exports = router;
-7. app.js (Main App File)
-Set up Express and include the routes.
+brew install apache-spark
 
-js
-Copy code
-const express = require("express");
-const bodyParser = require("body-parser");
+2. Verify Spark Installation
+bash
+Copy
+Edit
 
-const userRoutes = require("./routes/users");
-const noteRoutes = require("./routes/notes");
+spark-shell
 
-const app = express();
-app.use(bodyParser.json());
+If Spark runs without errors, it is installed correctly.
 
-// Routes
-app.use("/users", userRoutes);
-app.use("/notes", noteRoutes);
+✅ Now Spark is installed on your Mac!
 
-// Start server
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-8. Create Tables in PostgreSQL
-Since PostgreSQL doesn’t auto-create tables like SQLite, create them manually:
+Step 4: Install Python Libraries
+Run this in Terminal or Jupyter Notebook:
 
-sh
-Copy code
-psql -U your_db_user -d notejam
-Then run:
+bash
+Copy
+Edit
 
-sql
-Copy code
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    email VARCHAR(75) UNIQUE NOT NULL,
-    password VARCHAR(128) NOT NULL
-);
+pip install kafka-python pyspark delta-spark
 
-CREATE TABLE notes (
-    id SERIAL PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    content TEXT NOT NULL,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
-);
-9. Run the Application
-Step 1: Install Dependencies
-sh
-Copy code
-npm install
-Step 2: Start the Server
-sh
-Copy code
-npm start
-10. Test the API
-1. Register a User
-sh
-Copy code
-curl -X POST http://localhost:3000/users/register \
-     -H "Content-Type: application/json" \
-     -d '{"email": "user@example.com", "password": "12345"}'
-2. Get All Users
-sh
-Copy code
-curl -X GET http://localhost:3000/users
-3. Create a Note
-sh
-Copy code
-curl -X POST http://localhost:3000/notes/create \
-     -H "Content-Type: application/json" \
-     -d '{"title": "First Note", "content": "This is a note", "userId": 1}'
-4. Get All Notes
-sh
-Copy code
-curl -X GET http://localhost:3000/notes
-Final Summary
-✅ Replaced SQLite with PostgreSQL in all files.
-✅ Used pg.Pool for database connections.
-✅ Updated all db.run queries to use PostgreSQL syntax.
-✅ Added SQL scripts to create tables manually.
-✅ Fully migrated the entire application to PostgreSQL.
+✅ Now, you can use Kafka and Spark in Python.
 
-Let me know if you need further modifications! 🚀
+Step 2: Kafka Producer (Publishing Data to Kafka)
+This script reads a CSV file using Spark, processes it, and then publishes messages to a Kafka topic.
 
+python
+Copy
+Edit
 
+from pyspark.sql import SparkSession
+from kafka import KafkaProducer
+import json
+import time
 
+# Initialize Spark Session
+spark = SparkSession.builder.appName("KafkaProducer").getOrCreate()
 
+# Read CSV File
+df = spark.read.option("header", True).csv("wind_power_data.csv")
 
+# Convert DataFrame to List of Dictionaries
+data = df.toPandas().to_dict(orient="records")
 
-You said:
-There is one more route called pads.js
-ChatGPT said:
-Thanks for the update! I'll also migrate routes/pads.js to use PostgreSQL with pg.Pool.
+# Kafka Configuration
+KAFKA_BROKER = "localhost:9092"  # Update with your Kafka broker
+KAFKA_TOPIC = "wind_power_data"
 
-1. routes/pads.js (Pad Routes)
-Convert SQLite queries to PostgreSQL queries.
+# Initialize Kafka Producer
+producer = KafkaProducer(
+    bootstrap_servers=KAFKA_BROKER,
+    value_serializer=lambda v: json.dumps(v).encode("utf-8")
+)
 
-js
-Copy code
-const express = require("express");
-const pool = require("../db");
-const router = express.Router();
+# Publish Messages to Kafka
+for record in data:
+    producer.send(KAFKA_TOPIC, value=record)
+    time.sleep(0.5)  # Small delay to simulate streaming
 
-// Create a Pad
-router.post("/create", async (req, res) => {
-  const { name, userId } = req.body;
-  try {
-    const result = await pool.query(
-      "INSERT INTO pads (name, user_id) VALUES ($1, $2) RETURNING *",
-      [name, userId]
-    );
-    res.json(result.rows[0]);
-  } catch (err) {
-    res.status(500).json(err);
-  }
-});
+print("Data published to Kafka successfully!")
+producer.flush()
+producer.close()
 
-// Get all Pads for a user
-router.get("/:userId", async (req, res) => {
-  const { userId } = req.params;
-  try {
-    const result = await pool.query("SELECT * FROM pads WHERE user_id = $1", [userId]);
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json(err);
-  }
-});
+✅ This script reads a CSV file, converts it to JSON, and publishes records to a Kafka topic.
 
-// Delete a Pad
-router.delete("/:padId", async (req, res) => {
-  const { padId } = req.params;
-  try {
-    await pool.query("DELETE FROM pads WHERE id = $1", [padId]);
-    res.json({ message: "Pad deleted successfully" });
-  } catch (err) {
-    res.status(500).json(err);
-  }
-});
+Step 3: Kafka Subscriber (Reading Data from Kafka and Writing to Delta Table)
+This script subscribes to Kafka, reads the messages using Spark Structured Streaming, and writes data to a Delta table.
 
-module.exports = router;
-2. Update app.js to Include Pads Routes
-Modify app.js to register the new route.
+python
+Copy
+Edit
 
-js
-Copy code
-const express = require("express");
-const bodyParser = require("body-parser");
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import from_json, col
+from pyspark.sql.types import StructType, StructField, StringType, FloatType, TimestampType
+from delta import *
 
-const userRoutes = require("./routes/users");
-const noteRoutes = require("./routes/notes");
-const padRoutes = require("./routes/pads"); // Add Pads route
+# Initialize Spark Session with Delta Support
+spark = SparkSession.builder \
+    .appName("KafkaSubscriber") \
+    .config("spark.sql.extensions", "io.delta.sql.DeltaSparkSessionExtension") \
+    .config("spark.sql.catalog.spark_catalog", "org.apache.spark.sql.delta.catalog.DeltaCatalog") \
+    .getOrCreate()
 
-const app = express();
-app.use(bodyParser.json());
+# Kafka Configuration
+KAFKA_BROKER = "localhost:9092"
+KAFKA_TOPIC = "wind_power_data"
 
-// Routes
-app.use("/users", userRoutes);
-app.use("/notes", noteRoutes);
-app.use("/pads", padRoutes); // Register Pads routes
+# Define Schema for Incoming Data
+schema = StructType([
+    StructField("signal_date", StringType(), True),
+    StructField("signal_ts", TimestampType(), True),
+    StructField("LV ActivePower (kW)", FloatType(), True),
+    StructField("Wind Speed (m/s)", FloatType(), True),
+    StructField("Theoretical_Power_Curve (KWh)", FloatType(), True),
+    StructField("Wind Direction (°)", FloatType(), True)
+])
 
-// Start server
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-3. Create the Pads Table in PostgreSQL
-Since PostgreSQL does not create tables automatically, manually create the pads table.
+# Read Data from Kafka
+df = spark.readStream \
+    .format("kafka") \
+    .option("kafka.bootstrap.servers", KAFKA_BROKER) \
+    .option("subscribe", KAFKA_TOPIC) \
+    .option("startingOffsets", "earliest") \
+    .load()
 
-sh
-Copy code
-psql -U your_db_user -d notejam
-Then run:
+# Deserialize JSON Messages
+df = df.selectExpr("CAST(value AS STRING)") \
+    .select(from_json(col("value"), schema).alias("data")) \
+    .select("data.*")
 
-sql
-Copy code
-CREATE TABLE pads (
-    id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE
-);
-4. Run the Application
-Step 1: Install Dependencies
-sh
-Copy code
-npm install
-Step 2: Start the Server
-sh
-Copy code
-npm start
-5. Test the Pads API
-1. Create a Pad
-sh
-Copy code
-curl -X POST http://localhost:3000/pads/create \
-     -H "Content-Type: application/json" \
-     -d '{"name": "My First Pad", "userId": 1}'
-2. Get All Pads for a User
-sh
-Copy code
-curl -X GET http://localhost:3000/pads/1
-3. Delete a Pad
-sh
-Copy code
-curl -X DELETE http://localhost:3000/pads/1
-Final Summary
-✅ Fully migrated routes/pads.js to PostgreSQL.
-✅ Added pg.Pool queries instead of SQLite.
-✅ Updated app.js to include Pads routes.
-✅ Created the pads table in PostgreSQL.
-✅ Provided API tests to verify everything works.
+# Write to Delta Table
+df.writeStream \
+    .format("delta") \
+    .option("path", "delta_table_path") \
+    .option("checkpointLocation", "delta_checkpoint") \
+    .outputMode("append") \
+    .start() \
+    .awaitTermination()
 
-Your Notejam app is now fully using PostgreSQL! Let me know if you need more changes. 🚀
+✅ This script reads data from Kafka, applies schema, and writes it to a Delta table.
