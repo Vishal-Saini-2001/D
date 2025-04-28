@@ -1,3 +1,6 @@
+nitin.agarwal@coer.ac.in
+
+
 Step 1: Install Java (Required for Kafka & Spark)
 Check if Java is installed:
 
